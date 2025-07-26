@@ -1,8 +1,9 @@
 using System.Text.RegularExpressions;
+using Avora.Agent.Core.Tokens;
 
 namespace Avora.Agent.Core;
 
-public class Tokenizer {
+public class Tokenizer : ITokenizer {
     private static readonly Regex TokenPattern = new(@"[\p{L}\p{N}\p{M}]+|[\p{P}\p{S}]", RegexOptions.Compiled);
 
     public List<Token> Tokenize(string input) {
@@ -14,12 +15,13 @@ public class Tokenizer {
 
         for (int i = 0; i < matches.Count; i++) {
             var match = matches[i];
-            tokens.Add(new Token(
-                Value: match.Value,
-                StartIndex: match.Index,
-                Length: match.Length,
-                IndexInSequence: i
-            ));
+            tokens.Add(new Token {
+                Value = match.Value,
+                StartIndex = match.Index,
+                End = match.Index + match.Length,
+                Length = match.Length,
+                IndexInSequence = i
+            });
         }
 
         return tokens;

@@ -1,5 +1,5 @@
 namespace Avora.Agent.Api.Models;
 
-public class QueryDto {
-    
+public sealed class QueryDto {
+    public string OriginalText { get; set; } = string.Empty;
 }

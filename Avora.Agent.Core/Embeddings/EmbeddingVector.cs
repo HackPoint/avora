@@ -1,4 +1,4 @@
-namespace Avora.Agent.Core.Embedding;
+namespace Avora.Agent.Core.Embeddings;
 
 /// <summary>
 /// Represents a floating-point vector used for embedding texts or queries

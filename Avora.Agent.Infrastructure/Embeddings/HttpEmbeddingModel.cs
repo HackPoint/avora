@@ -5,10 +5,10 @@ namespace Avora.Agent.Infrastructure.Embeddings;
 
 public class HttpEmbeddingModel(HttpClient http) : IEmbeddingModel {
     public float[] Embed(string text) {
-        var response = http.PostAsJsonAsync("/embed", new { text }).Result;
+        var response = http.PostAsJsonAsync("/embed", new EmbedRequest { Texts = [text] }).Result;
         response.EnsureSuccessStatusCode();
-        var result = response.Content.ReadFromJsonAsync<float[]>().Result;
-        return result!;
+        var result = response.Content.ReadFromJsonAsync<EmbedResult>().Result;
+        return result!.Embeddings[0];
     }
 
     public IReadOnlyList<float[]> EmbedMany(IEnumerable<string> inputs) {

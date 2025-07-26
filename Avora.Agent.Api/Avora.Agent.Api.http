@@ -1,0 +1,13 @@
+###
+
+### Test: Ask the Reasoning Agent
+
+POST http://localhost:5029/api/agent/ask
+Content-Type: application/json
+Accept: application/json
+
+{
+  "originalText": "What is tokenization in NLP?"
+}
+
+###
