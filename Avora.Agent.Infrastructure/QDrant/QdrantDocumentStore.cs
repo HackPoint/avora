@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Text.Json;
 using Avora.Agent.Core.Query;
 using Avora.Agent.Core.Storage;
@@ -17,19 +16,12 @@ public sealed class QdrantDocumentStore(QdrantClient client) : IDocumentStore {
             ["index"] = chunk.Index
         };
 
-        // Embedding with payload
-        var body = new {
-            points = new[] {
-                new {
-                    id = chunk.Id.ToString(),
-                    vector = chunk.Embedding,
-                    payload
-                }
-            }
-        };
-
-        var response = client.Http.PutAsJsonAsync($"/collections/{client.CollectionName}/points", body).Result;
-        response.EnsureSuccessStatusCode();
+        // Push embedding with metadata payload
+        client.UpsertAsync(
+            id: chunk.Id.ToString(),
+            vector: chunk.Embedding,
+            payload: payload
+        ).GetAwaiter().GetResult();
     }
 
     public void Delete(QueryId id) {
@@ -38,8 +30,6 @@ public sealed class QdrantDocumentStore(QdrantClient client) : IDocumentStore {
 
     public IReadOnlyList<DocumentChunk> GetChunks(IEnumerable<QueryId> ids) {
         var stringIds = ids.Select(id => id.ToString()).ToList();
-
-        // Get points with vectors and payload's
         var points = client.GetPointAsync(stringIds).Result;
 
         var result = new List<DocumentChunk>();
@@ -48,7 +38,6 @@ public sealed class QdrantDocumentStore(QdrantClient client) : IDocumentStore {
             if (point.vector is not { Length: > 0 } vector || point.payload is null)
                 continue;
 
-            // Read payload (from JsonElement)
             var payload = point.payload;
 
             payload.TryGetValue("content", out var contentEl);
@@ -59,7 +48,7 @@ public sealed class QdrantDocumentStore(QdrantClient client) : IDocumentStore {
             var source = sourceEl.ValueKind == JsonValueKind.String ? sourceEl.GetString() : null;
             var index = indexEl.ValueKind == JsonValueKind.Number ? indexEl.GetInt32() : 0;
 
-            var queryId = QueryId.From(point.id); // string → QueryId
+            var queryId = QueryId.From(point.id);
 
             result.Add(new DocumentChunk(queryId, content, vector, source, index));
         }

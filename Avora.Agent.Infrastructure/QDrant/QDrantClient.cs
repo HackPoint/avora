@@ -7,34 +7,36 @@ namespace Avora.Agent.Infrastructure.Qdrant;
 /// Handles low-level REST calls to a Qdrant instance.
 /// </summary>
 public class QdrantClient(HttpClient http, string collectionName) {
-    public HttpClient Http => http;
-    public string CollectionName => collectionName;
+    public string CollectionName { get; } = collectionName;
 
-    public async Task EnsureCollectionAsync() {
-        var response = await http.PutAsJsonAsync($"/collections/{collectionName}", new {
+    public async Task EnsureCollectionAsync(int vectorSize = 384) {
+        var body = new {
             vectors = new {
-                size = 32,
+                size = vectorSize,
                 distance = "Cosine"
             }
-        });
-        response.EnsureSuccessStatusCode();
+        };
+
+        var response = await http.PutAsJsonAsync($"/collections/{CollectionName}", body);
+        await EnsureSuccess(response, "EnsureCollectionAsync");
     }
 
-    public async Task UpsertAsync(string id, float[] vector) {
+    public async Task UpsertAsync(string id, float[] vector, object? payload = null) {
         var body = new {
             points = new[] {
                 new {
                     id,
-                    vector
+                    vector,
+                    payload
                 }
             }
         };
 
-        var response = await http.PutAsJsonAsync($"/collections/{collectionName}/points", body);
-        response.EnsureSuccessStatusCode();
+        var response = await http.PutAsJsonAsync($"/collections/{CollectionName}/points", body);
+        await EnsureSuccess(response, "UpsertAsync");
     }
 
-    public async Task<List<(string Id, float Score)>> SearchAsync(float[] query, int topK) {
+    public async Task<List<(string Id, float Score)>> SearchAsync(float[] query, int topK = 5) {
         var body = new {
             vector = query,
             top = topK,
@@ -42,8 +44,8 @@ public class QdrantClient(HttpClient http, string collectionName) {
             with_vector = false
         };
 
-        var response = await http.PostAsJsonAsync($"/collections/{collectionName}/points/search", body);
-        response.EnsureSuccessStatusCode();
+        var response = await http.PostAsJsonAsync($"/collections/{CollectionName}/points/search", body);
+        await EnsureSuccess(response, "SearchAsync");
 
         var result = await response.Content.ReadFromJsonAsync<SearchResult>();
         return result?.result.Select(r => (r.id, r.score)).ToList() ?? new();
@@ -54,44 +56,52 @@ public class QdrantClient(HttpClient http, string collectionName) {
             points = new[] { id }
         };
 
-        var response = await http.PostAsJsonAsync($"/collections/{collectionName}/points/delete", body);
-        response.EnsureSuccessStatusCode();
+        var response = await http.PostAsJsonAsync($"/collections/{CollectionName}/points/delete", body);
+        await EnsureSuccess(response, "DeleteAsync");
     }
 
     public async Task<List<QdrantPoint>> GetPointAsync(IEnumerable<string> ids) {
-        var response = await http.PostAsJsonAsync($"/collections/{collectionName}/points", new {
-            ids = ids.ToArray()
-        });
+        var body = new {
+            ids = ids.ToArray(),
+            with_payload = true,
+            with_vector = true
+        };
 
-        response.EnsureSuccessStatusCode();
+        var response = await http.PostAsJsonAsync($"/collections/{CollectionName}/points", body);
+        await EnsureSuccess(response, "GetPointAsync");
 
         var result = await response.Content.ReadFromJsonAsync<GetPointsResponse>();
-        return result?.result.points ?? new();
+        return result?.result ?? new();
     }
 
+    private static async Task EnsureSuccess(HttpResponseMessage response, string operation) {
+        if (!response.IsSuccessStatusCode) {
+            var content = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException(
+                $"Qdrant error in {operation}: {(int)response.StatusCode} {response.ReasonPhrase}\n{content}");
+        }
+    }
+
+    // Response DTOs
     private class SearchResult {
         public List<ResultItem> result { get; set; } = new();
 
         public class ResultItem {
-            public string id { get; set; }
+            public string id { get; set; } = string.Empty;
             public float score { get; set; }
         }
     }
 
     public class QdrantPoint {
         public string id { get; set; } = string.Empty;
-
         public float[] vector { get; set; } = [];
-
         public Dictionary<string, JsonElement> payload { get; set; } = new();
     }
 
-    private class QdrantGetResponse {
-        public List<QdrantPoint> result { get; set; } = new();
-    }
-    
     private class GetPointsResponse {
-        public PointsContainer result { get; set; } = new();
+        public List<QdrantPoint> result { get; set; } = new();
+        public string status { get; set; }
+        public float time { get; set; }
     }
 
     private class PointsContainer {

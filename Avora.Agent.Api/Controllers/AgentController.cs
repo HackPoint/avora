@@ -16,6 +16,8 @@ public class AgentController(IAgent agent, IQueryFactory queryFactory) : Control
 
         var query = queryFactory.Create(dto.OriginalText);
         
+        var answer = agent.Execute(query);
+        
         return Ok(new {
             query.Id,
             query.NormalizedText,
